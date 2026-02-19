@@ -1,4 +1,5 @@
 import React from 'react';
+import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet';
 
 import { useIntl } from '@edx/frontend-platform/i18n';
@@ -28,6 +29,8 @@ import LearnerDashboardHeader from 'containers/LearnerDashboardHeader';
 import { getConfig } from '@edx/frontend-platform';
 import messages from './messages';
 import './App.scss';
+import { getAuthenticatedHttpClient } from '@edx/frontend-platform/auth';
+import RestrictionPage from 'components/restriction-page/RestrictionPage';
 
 export const App = () => {
   const { authenticatedUser } = React.useContext(AppContext);
@@ -39,6 +42,7 @@ export const App = () => {
   const hasNetworkFailure = isFailed.initialize || isFailed.refreshList;
   const { supportEmail } = reduxHooks.usePlatformSettingsData();
   const loadData = reduxHooks.useLoadData();
+  const [hasProfileCompleted, setHasProfileCompleted] = useState(false);
 
   React.useEffect(() => {
     if (authenticatedUser?.administrator || getConfig().NODE_ENV === 'development') {
@@ -71,6 +75,28 @@ export const App = () => {
       }
     }
   }, [authenticatedUser, loadData]);
+  useEffect(() => {
+    const { LMS_BASE_URL } = getConfig();
+
+    const loadProfileCompletion = async () => {
+      try {
+        const client = getAuthenticatedHttpClient();
+        const { data } = await client.get(`${LMS_BASE_URL}/profile/progress/?role=student`);
+        if (data?.percentage === 100) {
+          setHasProfileCompleted(true);
+        } else {
+          setHasProfileCompleted(false);
+        }
+
+      } catch (err) {
+        console.error('Failed to load profile progress:', err);
+        setHasProfileCompleted(false);
+      }
+    };
+
+    loadProfileCompletion();
+  }, []);
+
   return (
     <>
       <Helmet>
@@ -79,6 +105,7 @@ export const App = () => {
       </Helmet>
       <div>
         <AppWrapper>
+          {!hasProfileCompleted && <RestrictionPage />}
           <LearnerDashboardHeader />
           <main id="main">
             {hasNetworkFailure
